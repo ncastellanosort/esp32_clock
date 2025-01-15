@@ -1,21 +1,21 @@
-from servo import Servo
-from ssd1306 import SSD1306_I2C
 import time, machine
 import network, time, ntptime, utime
+from ssd1306 import SSD1306_I2C
 from machine import I2C, PWM
 
-# led = machine.Pin(2, machine.Pin.OUT)
-# # motor = Servo(pin=21)
-
 buzzer = PWM(machine.Pin(15))
-i2c = I2C(0,sda = machine.Pin(2),scl = machine.Pin(5),freq = 40000)
-oled = SSD1306_I2C(128, 64, i2c)
-
 buzzer.duty_u16(0)
+i2c = I2C(0,sda = machine.Pin(2),scl = machine.Pin(5),freq = 40000)
+oled = SSD1306_I2C(128, 64, i2c, addr=0x3C)
 
 TIMEZONE_OFFSET = -5 
 
 DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+def show_message(message, line, pos_x = 0):
+    oled.fill(0)
+    oled.text(message, pos_x, line, 1)
+    oled.show()
 
 def wifi_connect(network_name, password):
     global my_network
@@ -26,16 +26,11 @@ def wifi_connect(network_name, password):
         my_network.active(True)
         my_network.connect(network_name, password)
         
-        oled.fill(0)
-        oled.text(f'Hello!', 42, 30, 1)
-        oled.show()
+        show_message("Hello!", 30, 42)
         time.sleep(1)
-        oled.fill(0)
-        oled.text(f'Trying to', 0, 30, 1)
-        oled.text(f'connect...', 0, 40, 1)
-        oled.text(f'{network_name}', 0, 52, 1)
-        oled.show()
         
+        show_message("Connecting...", 30, 15)
+                
         timeout = time.time()
         
         while not my_network.isconnected():
@@ -45,7 +40,6 @@ def wifi_connect(network_name, password):
     return True
   
 def localtime_adjusted():
-
     utc_time = utime.localtime()
     year, month, day, hour, minute, second, weekday, dayinyear = utc_time
 
@@ -76,46 +70,41 @@ def localtime_adjusted():
 
     return year, month, day, hour, minute, second, weekday
 
+def refresh_display(minute_1, minute_2):
+    if (minute == minute_1 or minute == minute_2) and second == 0:
+        oled.fill(0)
+        oled.show()
+
+def buzz_hour():
+    if(minute == 59 and second == 59):
+        buzzer.duty_u16(32767)
+        buzzer.freq(1319)
+        time.sleep(0.5)
+        buzzer.duty_u16(0)
+
 if wifi_connect('EYE3 2.4G','Castellanos2023Ort'):
-    oled.fill(0)
-    oled.text('Connected!', 23, 30, 1)
-    oled.show()
-    time.sleep(0.5)
-    
     try:
+        show_message("Connected!", 30, 20)
+        time.sleep(1)
         ntptime.host = "pool.ntp.org"  
         ntptime.settime()
-        print("Hour synchronized with NTP server")
+    
     except Exception as e:
-        print("Failed", e)
+        show_message(f'Error {e}', 30)
         
     while True:
         year, month, day, hour, minute, second, weekday = localtime_adjusted()
         
         day_name = DAYS_OF_WEEK[weekday]
         
-        if (minute == 20 or minute == 40) and second == 0:
-            oled.fill(1)
-            oled.show()
-            time.sleep(0.5)
-            oled.fill(0)
-            oled.show()
+        refresh_display(20, 50)
+        buzz_hour()
             
-        if(minute == 59 and second == 59):
-            buzzer.duty_u16(32767)
-            buzzer.freq(1319)
-            time.sleep(0.5)
-            buzzer.duty_u16(0)
-
         oled.fill(0)
         oled.text(day_name, 0, 30, 1)
         oled.text("{:02d}/{:02d}/{:04d}".format(day, month, year), 0, 40, 1)
         oled.text("{:02d}:{:02d}:{:02d}".format(hour, minute, second), 0, 50, 1) 
         oled.show()
-
-        utime.sleep(1)
-
-
 
 
 
